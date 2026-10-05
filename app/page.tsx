@@ -197,7 +197,7 @@ export default function Home() {
   return (
     <main className="max-w-2xl mx-auto p-6">
       <h1 className="text-2xl font-bold mb-6 text-center text-slate-800">
-        🪓 Task Chopper
+         Task Chopper
       </h1>
 
       {/* 課題登録フォーム */}
