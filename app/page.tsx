@@ -3,11 +3,20 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 
+type Subtask = {
+  id: string;
+  task_id: string;
+  title: string;
+  is_completed: boolean;
+  created_at: string;
+};
+
 type Task = {
   id: string;
   title: string;
   is_completed: boolean;
   created_at: string;
+  subtasks?: Subtask[];
 };
 
 export default function Home() {
@@ -15,25 +24,53 @@ export default function Home() {
   const [title, setTitle] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // 1. タスク一覧の取得
+  // 展開中のタスクIDを保持
+  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
+
+  // サブタスク入力用の状態
+  const [subtaskTitle, setSubtaskTitle] = useState('');
+  const [subtaskLoading, setSubtaskLoading] = useState(false);
+
+  // 編集中のサブタスク状態
+  const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
+  const [editingSubtaskTitle, setEditingSubtaskTitle] = useState('');
+
+  // 1. タスクおよびサブタスクの一覧取得
   const fetchTasks = async () => {
-    const { data, error } = await supabase
+    const { data: tasksData, error: tasksError } = await supabase
       .from('tasks')
       .select('*')
       .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error('取得エラー:', error);
-    } else if (data) {
-      setTasks(data);
+    if (tasksError) {
+      console.error('タスク取得エラー:', tasksError);
+      return;
     }
+
+    const { data: subtasksData, error: subtasksError } = await supabase
+      .from('subtasks')
+      .select('*')
+      .order('created_at', { ascending: true });
+
+    if (subtasksError) {
+      console.error('サブタスク取得エラー:', subtasksError);
+      return;
+    }
+
+    // タスクにサブタスクを紐付け
+    const combinedTasks = tasksData.map((task) => ({
+      ...task,
+      subtasks: subtasksData?.filter((sub) => sub.task_id === task.id) || [],
+    }));
+
+    setTasks(combinedTasks);
   };
 
   useEffect(() => {
     fetchTasks();
   }, []);
 
-  // 2. タスクの新規登録
+  // 2. 親タスク新規登録
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
@@ -50,9 +87,8 @@ export default function Home() {
     setLoading(false);
   };
 
-  // 3. 完了状態のトグル（切り替え）
+  // 3. 親タスクの完了トグル
   const toggleTask = async (id: string, currentStatus: boolean) => {
-    // 画面側を先に応答させて打感（UX）を良くする
     setTasks((prev) =>
       prev.map((t) => (t.id === id ? { ...t, is_completed: !currentStatus } : t))
     );
@@ -64,13 +100,13 @@ export default function Home() {
 
     if (error) {
       alert('更新に失敗しました: ' + error.message);
-      fetchTasks(); // エラー時は元に戻す
+      fetchTasks();
     }
   };
 
-  // 4. タスクの削除
+  // 4. 親タスク削除
   const deleteTask = async (id: string) => {
-    if (!confirm('この課題を削除しますか？')) return;
+    if (!confirm('この課題と含まれるサブタスクをすべて削除しますか？')) return;
 
     setTasks((prev) => prev.filter((t) => t.id !== id));
 
@@ -78,7 +114,83 @@ export default function Home() {
 
     if (error) {
       alert('削除に失敗しました: ' + error.message);
-      fetchTasks(); // エラー時は元に戻す
+      fetchTasks();
+    }
+  };
+
+  // --- サブタスク操作 ---
+
+  // 5. サブタスク追加
+  const handleAddSubtask = async (taskId: string, e: React.FormEvent) => {
+    e.preventDefault();
+    if (!subtaskTitle.trim()) return;
+
+    setSubtaskLoading(true);
+    const { error } = await supabase.from('subtasks').insert([
+      {
+        task_id: taskId,
+        title: subtaskTitle,
+        is_completed: false,
+      },
+    ]);
+
+    if (error) {
+      alert('サブタスク追加エラー: ' + error.message);
+    } else {
+      setSubtaskTitle('');
+      fetchTasks();
+    }
+    setSubtaskLoading(false);
+  };
+
+  // 6. サブタスク完了トグル
+  const toggleSubtask = async (subtaskId: string, currentStatus: boolean) => {
+    setTasks((prev) =>
+      prev.map((task) => ({
+        ...task,
+        subtasks: task.subtasks?.map((sub) =>
+          sub.id === subtaskId ? { ...sub, is_completed: !currentStatus } : sub
+        ),
+      }))
+    );
+
+    const { error } = await supabase
+      .from('subtasks')
+      .update({ is_completed: !currentStatus })
+      .eq('id', subtaskId);
+
+    if (error) {
+      alert('サブタスク更新エラー: ' + error.message);
+      fetchTasks();
+    }
+  };
+
+  // 7. サブタスク編集保存
+  const handleUpdateSubtask = async (subtaskId: string) => {
+    if (!editingSubtaskTitle.trim()) return;
+
+    const { error } = await supabase
+      .from('subtasks')
+      .update({ title: editingSubtaskTitle })
+      .eq('id', subtaskId);
+
+    if (error) {
+      alert('サブタスク更新エラー: ' + error.message);
+    } else {
+      setEditingSubtaskId(null);
+      setEditingSubtaskTitle('');
+      fetchTasks();
+    }
+  };
+
+  // 8. サブタスク削除
+  const deleteSubtask = async (subtaskId: string) => {
+    const { error } = await supabase.from('subtasks').delete().eq('id', subtaskId);
+
+    if (error) {
+      alert('サブタスク削除エラー: ' + error.message);
+    } else {
+      fetchTasks();
     }
   };
 
@@ -88,7 +200,7 @@ export default function Home() {
         🪓 Task Chopper
       </h1>
 
-      {/* 登録フォーム */}
+      {/* 課題登録フォーム */}
       <form onSubmit={handleSubmit} className="flex gap-2 mb-8">
         <input
           type="text"
@@ -107,44 +219,185 @@ export default function Home() {
         </button>
       </form>
 
-      {/* タスク一覧 */}
+      {/* 課題一覧 */}
       <section>
         <h2 className="text-lg font-semibold mb-4 text-gray-700">登録された課題一覧</h2>
         {tasks.length === 0 ? (
           <p className="text-gray-400 text-center py-8">課題はまだ登録されていません。</p>
         ) : (
-          <ul className="space-y-3">
-            {tasks.map((task) => (
-              <li
-                key={task.id}
-                className={`p-4 border rounded-lg shadow-sm flex items-center justify-between transition ${
-                  task.is_completed ? 'bg-gray-50 border-gray-200' : 'bg-white border-gray-200'
-                }`}
-              >
-                <div className="flex items-center gap-3 flex-1 mr-4">
-                  <input
-                    type="checkbox"
-                    checked={task.is_completed}
-                    onChange={() => toggleTask(task.id, task.is_completed)}
-                    className="w-5 h-5 accent-slate-800 cursor-pointer"
-                  />
-                  <span
-                    className={`font-medium ${
-                      task.is_completed ? 'line-through text-gray-400' : 'text-gray-800'
-                    }`}
-                  >
-                    {task.title}
-                  </span>
-                </div>
+          <ul className="space-y-4">
+            {tasks.map((task) => {
+              const isExpanded = expandedTaskId === task.id;
+              const completedSubCount =
+                task.subtasks?.filter((s) => s.is_completed).length || 0;
+              const totalSubCount = task.subtasks?.length || 0;
 
-                <button
-                  onClick={() => deleteTask(task.id)}
-                  className="px-3 py-1 text-sm text-red-600 hover:bg-red-50 rounded transition"
+              return (
+                <li
+                  key={task.id}
+                  className={`border rounded-lg shadow-sm transition overflow-hidden ${
+                    task.is_completed ? 'bg-gray-50 border-gray-200' : 'bg-white border-gray-200'
+                  }`}
                 >
-                  削除
-                </button>
-              </li>
-            ))}
+                  {/* 親タスクヘッダー */}
+                  <div className="p-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3 flex-1 mr-2">
+                      <input
+                        type="checkbox"
+                        checked={task.is_completed}
+                        onChange={() => toggleTask(task.id, task.is_completed)}
+                        className="w-5 h-5 accent-slate-800 cursor-pointer"
+                      />
+                      <span
+                        className={`font-medium ${
+                          task.is_completed ? 'line-through text-gray-400' : 'text-gray-800'
+                        }`}
+                      >
+                        {task.title}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {/* 分解ボタン / 進捗バッジ */}
+                      <button
+                        onClick={() =>
+                          setExpandedTaskId(isExpanded ? null : task.id)
+                        }
+                        className="px-3 py-1 text-xs font-semibold rounded-full border border-slate-300 hover:bg-slate-100 text-slate-700 transition flex items-center gap-1"
+                      >
+                        ⚡ チョップ（15分分解）
+                        {totalSubCount > 0 && (
+                          <span className="bg-slate-200 px-1.5 py-0.5 rounded-full text-slate-800">
+                            {completedSubCount}/{totalSubCount}
+                          </span>
+                        )}
+                      </button>
+
+                      <button
+                        onClick={() => deleteTask(task.id)}
+                        className="px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded transition"
+                      >
+                        削除
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 階層化表示：サブタスクエリア */}
+                  {isExpanded && (
+                    <div className="bg-slate-50 border-t border-gray-200 p-4 pl-8 space-y-3">
+                      <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                        ⏱️ 15分アクション（サブタスク）
+                      </h3>
+
+                      {/* サブタスク追加フォーム */}
+                      <form
+                        onSubmit={(e) => handleAddSubtask(task.id, e)}
+                        className="flex gap-2"
+                      >
+                        <input
+                          type="text"
+                          value={subtaskTitle}
+                          onChange={(e) => setSubtaskTitle(e.target.value)}
+                          placeholder="15分で終わる作業（例：目次案をメモ帳に書く）"
+                          className="flex-1 p-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-slate-500"
+                          disabled={subtaskLoading}
+                        />
+                        <button
+                          type="submit"
+                          disabled={subtaskLoading || !subtaskTitle.trim()}
+                          className="px-4 py-2 bg-slate-700 text-white text-sm font-medium rounded hover:bg-slate-600 disabled:opacity-50 transition"
+                        >
+                          追加
+                        </button>
+                      </form>
+
+                      {/* サブタスク一覧 */}
+                      {task.subtasks && task.subtasks.length > 0 ? (
+                        <ul className="space-y-2 mt-2">
+                          {task.subtasks.map((sub) => (
+                            <li
+                              key={sub.id}
+                              className="p-2.5 bg-white border border-gray-200 rounded flex items-center justify-between text-sm"
+                            >
+                              {editingSubtaskId === sub.id ? (
+                                // 編集モード
+                                <div className="flex items-center gap-2 flex-1 mr-2">
+                                  <input
+                                    type="text"
+                                    value={editingSubtaskTitle}
+                                    onChange={(e) =>
+                                      setEditingSubtaskTitle(e.target.value)
+                                    }
+                                    className="flex-1 p-1 border rounded text-sm focus:outline-none"
+                                  />
+                                  <button
+                                    onClick={() => handleUpdateSubtask(sub.id)}
+                                    className="text-xs text-green-600 hover:underline"
+                                  >
+                                    保存
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingSubtaskId(null)}
+                                    className="text-xs text-gray-500 hover:underline"
+                                  >
+                                    キャンセル
+                                  </button>
+                                </div>
+                              ) : (
+                                // 通常表示モード
+                                <>
+                                  <div className="flex items-center gap-2.5 flex-1 mr-2">
+                                    <input
+                                      type="checkbox"
+                                      checked={sub.is_completed}
+                                      onChange={() =>
+                                        toggleSubtask(sub.id, sub.is_completed)
+                                      }
+                                      className="w-4 h-4 accent-slate-700 cursor-pointer"
+                                    />
+                                    <span
+                                      className={
+                                        sub.is_completed
+                                          ? 'line-through text-gray-400'
+                                          : 'text-gray-700'
+                                      }
+                                    >
+                                      {sub.title}
+                                    </span>
+                                  </div>
+
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      onClick={() => {
+                                        setEditingSubtaskId(sub.id);
+                                        setEditingSubtaskTitle(sub.title);
+                                      }}
+                                      className="text-xs text-gray-500 hover:text-slate-800"
+                                    >
+                                      編集
+                                    </button>
+                                    <button
+                                      onClick={() => deleteSubtask(sub.id)}
+                                      className="text-xs text-red-500 hover:underline"
+                                    >
+                                      削除
+                                    </button>
+                                  </div>
+                                </>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-xs text-gray-400 italic">
+                          サブタスクはまだありません。15分でできる小さな作業を追加してみましょう！
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>
