@@ -197,7 +197,7 @@ export default function Home() {
     // 背景画像設定
     <main className="relative min-h-screen bg-[url('/薪割り.jpeg')] bg-cover bg-center bg-fixed bg-no-repeat p-6 text-white">
       {/* 黒色の半透明オーバーレイ（白文字を見やすくするための黒フィルター） */}
-      <div className="fixed inset-0 bg-black/80 backdrop-blur-xs -z-10" />
+      <div className="fixed inset-0 bg-black/90 backdrop-blur-xs -z-10" />
 
       {/* コンテンツエリア */}
       <div className="max-w-2xl mx-auto">
@@ -218,7 +218,7 @@ export default function Home() {
           <button
             type="submit"
             disabled={loading || !title.trim()}
-            className="px-6 py-3 bg-white text-slate-900 font-bold rounded-lg hover:bg-slate-200 disabled:opacity-50 transition"
+            className="px-6 py-3 bg-black text-slate-900 font-bold rounded-lg hover:bg-slate-200 disabled:opacity-50 transition"
           >
             {loading ? '追加中...' : '追加'}
           </button>
