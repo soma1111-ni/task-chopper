@@ -315,7 +315,7 @@ export default function Home() {
                           <button
                             type="submit"
                             disabled={loading || !title.trim()}
-                            className="px-6 py-3 bg-white text-slate-800 font-semibold rounded-lg hover:bg-sky-200 disabled:opacity-50 transition shadow-sm"
+                            className="px-6 py-3 bg-white text-slate-800 font-semibold rounded-lg hover:bg-sky-200 disabled:bg-gray-200 disabled:text-gray-400 transition shadow-sm opacity-100"
                           >
                             {loading ? '追加中...' : '追加'}
                           </button>
