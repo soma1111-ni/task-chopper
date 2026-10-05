@@ -314,10 +314,10 @@ export default function Home() {
                           />
                           <button
                             type="submit"
-                            disabled={subtaskLoading || !subtaskTitle.trim()}
-                            className="px-4 py-2 bg-slate-800 text-white text-sm font-medium rounded hover:bg-slate-700 disabled:opacity-50 transition"
+                            disabled={loading || !title.trim()}
+                            className="px-6 py-3 bg-white text-slate-800 font-semibold rounded-lg hover:bg-sky-200 disabled:opacity-50 transition shadow-sm"
                           >
-                            追加
+                            {loading ? '追加中...' : '追加'}
                           </button>
                         </form>
 
