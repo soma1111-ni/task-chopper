@@ -265,7 +265,7 @@ export default function Home() {
                         }
                         className="px-3 py-1 text-xs font-semibold rounded-full border border-slate-300 hover:bg-slate-100 text-slate-700 transition flex items-center gap-1"
                       >
-                        ⚡ チョップ（15分分解）
+                          チョップ（15分分解）
                         {totalSubCount > 0 && (
                           <span className="bg-slate-200 px-1.5 py-0.5 rounded-full text-slate-800">
                             {completedSubCount}/{totalSubCount}
@@ -286,7 +286,7 @@ export default function Home() {
                   {isExpanded && (
                     <div className="bg-slate-50 border-t border-gray-200 p-4 pl-8 space-y-3">
                       <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                        ⏱️ 15分アクション（サブタスク）
+                         15分アクション（サブタスク）
                       </h3>
 
                       {/* サブタスク追加フォーム */}
