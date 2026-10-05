@@ -195,212 +195,219 @@ export default function Home() {
   };
 
   return (
-    <main className="max-w-2xl mx-auto p-6">
-      <h1 className="text-2xl font-bold mb-6 text-center text-slate-800">
-         Task Chopper
-      </h1>
+    // 全体背景画像の設定（public/bg.jpg を指定）
+    <main className="relative min-h-screen bg-[url('/薪割り.jpeg')] bg-cover bg-center bg-fixed bg-no-repeat p-6">
+      {/* 白色の半透明オーバーレイ（文字を読みやすくするための透過フィルター） */}
+      <div className="fixed inset-0 bg-white/70 backdrop-blur-xs -z-10" />
 
-      {/* 課題登録フォーム */}
-      <form onSubmit={handleSubmit} className="flex gap-2 mb-8">
-        <input
-          type="text"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="大きな課題を入力（例：期末レポート 3,000字）"
-          className="flex-1 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-500"
-          disabled={loading}
-        />
-        <button
-          type="submit"
-          disabled={loading || !title.trim()}
-          className="px-6 py-3 bg-slate-800 text-white font-semibold rounded-lg hover:bg-slate-700 disabled:opacity-50 transition"
-        >
-          {loading ? '追加中...' : '追加'}
-        </button>
-      </form>
+      {/* コンテンツ表示エリア */}
+      <div className="max-w-2xl mx-auto">
+        <h1 className="text-2xl font-bold mb-6 text-center text-slate-800">
+           Task Chopper
+        </h1>
 
-      {/* 課題一覧 */}
-      <section>
-        <h2 className="text-lg font-semibold mb-4 text-gray-700">登録された課題一覧</h2>
-        {tasks.length === 0 ? (
-          <p className="text-gray-400 text-center py-8">課題はまだ登録されていません。</p>
-        ) : (
-          <ul className="space-y-4">
-            {tasks.map((task) => {
-              const isExpanded = expandedTaskId === task.id;
-              const completedSubCount =
-                task.subtasks?.filter((s) => s.is_completed).length || 0;
-              const totalSubCount = task.subtasks?.length || 0;
+        {/* 課題登録フォーム */}
+        <form onSubmit={handleSubmit} className="flex gap-2 mb-8">
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="大きな課題を入力（例：期末レポート 3,000字）"
+            className="flex-1 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-500 bg-white/90"
+            disabled={loading}
+          />
+          <button
+            type="submit"
+            disabled={loading || !title.trim()}
+            className="px-6 py-3 bg-slate-800 text-white font-semibold rounded-lg hover:bg-slate-700 disabled:opacity-50 transition"
+          >
+            {loading ? '追加中...' : '追加'}
+          </button>
+        </form>
 
-              return (
-                <li
-                  key={task.id}
-                  className={`border rounded-lg shadow-sm transition overflow-hidden ${
-                    task.is_completed ? 'bg-gray-50 border-gray-200' : 'bg-white border-gray-200'
-                  }`}
-                >
-                  {/* 親タスクヘッダー */}
-                  <div className="p-4 flex items-center justify-between">
-                    <div className="flex items-center gap-3 flex-1 mr-2">
-                      <input
-                        type="checkbox"
-                        checked={task.is_completed}
-                        onChange={() => toggleTask(task.id, task.is_completed)}
-                        className="w-5 h-5 accent-slate-800 cursor-pointer"
-                      />
-                      <span
-                        className={`font-medium ${
-                          task.is_completed ? 'line-through text-gray-400' : 'text-gray-800'
-                        }`}
-                      >
-                        {task.title}
-                      </span>
-                    </div>
+        {/* 課題一覧 */}
+        <section>
+          <h2 className="text-lg font-semibold mb-4 text-gray-700">登録された課題一覧</h2>
+          {tasks.length === 0 ? (
+            <p className="text-gray-400 text-center py-8">課題はまだ登録されていません。</p>
+          ) : (
+            <ul className="space-y-4">
+              {tasks.map((task) => {
+                const isExpanded = expandedTaskId === task.id;
+                const completedSubCount =
+                  task.subtasks?.filter((s) => s.is_completed).length || 0;
+                const totalSubCount = task.subtasks?.length || 0;
 
-                    <div className="flex items-center gap-2">
-                      {/* 分解ボタン / 進捗バッジ */}
-                      <button
-                        onClick={() =>
-                          setExpandedTaskId(isExpanded ? null : task.id)
-                        }
-                        className="px-3 py-1 text-xs font-semibold rounded-full border border-slate-300 hover:bg-slate-100 text-slate-700 transition flex items-center gap-1"
-                      >
-                          チョップ（15分分解）
-                        {totalSubCount > 0 && (
-                          <span className="bg-slate-200 px-1.5 py-0.5 rounded-full text-slate-800">
-                            {completedSubCount}/{totalSubCount}
-                          </span>
-                        )}
-                      </button>
-
-                      <button
-                        onClick={() => deleteTask(task.id)}
-                        className="px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded transition"
-                      >
-                        削除
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* 階層化表示：サブタスクエリア */}
-                  {isExpanded && (
-                    <div className="bg-slate-50 border-t border-gray-200 p-4 pl-8 space-y-3">
-                      <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                         15分アクション（サブタスク）
-                      </h3>
-
-                      {/* サブタスク追加フォーム */}
-                      <form
-                        onSubmit={(e) => handleAddSubtask(task.id, e)}
-                        className="flex gap-2"
-                      >
+                return (
+                  <li
+                    key={task.id}
+                    className={`border rounded-lg shadow-sm transition overflow-hidden ${
+                      task.is_completed ? 'bg-gray-50/90 border-gray-200' : 'bg-white/90 border-gray-200'
+                    }`}
+                  >
+                    {/* 親タスクヘッダー */}
+                    <div className="p-4 flex items-center justify-between">
+                      <div className="flex items-center gap-3 flex-1 mr-2">
                         <input
-                          type="text"
-                          value={subtaskTitle}
-                          onChange={(e) => setSubtaskTitle(e.target.value)}
-                          placeholder="15分で終わる作業（例：目次案をメモ帳に書く）"
-                          className="flex-1 p-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-slate-500"
-                          disabled={subtaskLoading}
+                          type="checkbox"
+                          checked={task.is_completed}
+                          onChange={() => toggleTask(task.id, task.is_completed)}
+                          className="w-5 h-5 accent-slate-800 cursor-pointer"
                         />
-                        <button
-                          type="submit"
-                          disabled={subtaskLoading || !subtaskTitle.trim()}
-                          className="px-4 py-2 bg-slate-700 text-white text-sm font-medium rounded hover:bg-slate-600 disabled:opacity-50 transition"
+                        <span
+                          className={`font-medium ${
+                            task.is_completed ? 'line-through text-gray-400' : 'text-gray-800'
+                          }`}
                         >
-                          追加
+                          {task.title}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {/* 分解ボタン / 進捗バッジ */}
+                        <button
+                          onClick={() =>
+                            setExpandedTaskId(isExpanded ? null : task.id)
+                          }
+                          className="px-3 py-1 text-xs font-semibold rounded-full border border-slate-300 hover:bg-slate-100 text-slate-700 transition flex items-center gap-1"
+                        >
+                           チョップ（15分分解）
+                          {totalSubCount > 0 && (
+                            <span className="bg-slate-200 px-1.5 py-0.5 rounded-full text-slate-800">
+                              {completedSubCount}/{totalSubCount}
+                            </span>
+                          )}
                         </button>
-                      </form>
 
-                      {/* サブタスク一覧 */}
-                      {task.subtasks && task.subtasks.length > 0 ? (
-                        <ul className="space-y-2 mt-2">
-                          {task.subtasks.map((sub) => (
-                            <li
-                              key={sub.id}
-                              className="p-2.5 bg-white border border-gray-200 rounded flex items-center justify-between text-sm"
-                            >
-                              {editingSubtaskId === sub.id ? (
-                                // 編集モード
-                                <div className="flex items-center gap-2 flex-1 mr-2">
-                                  <input
-                                    type="text"
-                                    value={editingSubtaskTitle}
-                                    onChange={(e) =>
-                                      setEditingSubtaskTitle(e.target.value)
-                                    }
-                                    className="flex-1 p-1 border rounded text-sm focus:outline-none"
-                                  />
-                                  <button
-                                    onClick={() => handleUpdateSubtask(sub.id)}
-                                    className="text-xs text-green-600 hover:underline"
-                                  >
-                                    保存
-                                  </button>
-                                  <button
-                                    onClick={() => setEditingSubtaskId(null)}
-                                    className="text-xs text-gray-500 hover:underline"
-                                  >
-                                    キャンセル
-                                  </button>
-                                </div>
-                              ) : (
-                                // 通常表示モード
-                                <>
-                                  <div className="flex items-center gap-2.5 flex-1 mr-2">
-                                    <input
-                                      type="checkbox"
-                                      checked={sub.is_completed}
-                                      onChange={() =>
-                                        toggleSubtask(sub.id, sub.is_completed)
-                                      }
-                                      className="w-4 h-4 accent-slate-700 cursor-pointer"
-                                    />
-                                    <span
-                                      className={
-                                        sub.is_completed
-                                          ? 'line-through text-gray-400'
-                                          : 'text-gray-700'
-                                      }
-                                    >
-                                      {sub.title}
-                                    </span>
-                                  </div>
-
-                                  <div className="flex items-center gap-2">
-                                    <button
-                                      onClick={() => {
-                                        setEditingSubtaskId(sub.id);
-                                        setEditingSubtaskTitle(sub.title);
-                                      }}
-                                      className="text-xs text-gray-500 hover:text-slate-800"
-                                    >
-                                      編集
-                                    </button>
-                                    <button
-                                      onClick={() => deleteSubtask(sub.id)}
-                                      className="text-xs text-red-500 hover:underline"
-                                    >
-                                      削除
-                                    </button>
-                                  </div>
-                                </>
-                              )}
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="text-xs text-gray-400 italic">
-                          サブタスクはまだありません。15分でできる小さな作業を追加してみましょう！
-                        </p>
-                      )}
+                        <button
+                          onClick={() => deleteTask(task.id)}
+                          className="px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded transition"
+                        >
+                          削除
+                        </button>
+                      </div>
                     </div>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
+
+                    {/* 階層化表示：サブタスクエリア */}
+                    {isExpanded && (
+                      <div className="bg-slate-50/90 border-t border-gray-200 p-4 pl-8 space-y-3">
+                        <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                           15分アクション（サブタスク）
+                        </h3>
+
+                        {/* サブタスク追加フォーム */}
+                        <form
+                          onSubmit={(e) => handleAddSubtask(task.id, e)}
+                          className="flex gap-2"
+                        >
+                          <input
+                            type="text"
+                            value={subtaskTitle}
+                            onChange={(e) => setSubtaskTitle(e.target.value)}
+                            placeholder="15分で終わる作業（例：目次案をメモ帳に書く）"
+                            className="flex-1 p-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-slate-500 bg-white"
+                            disabled={subtaskLoading}
+                          />
+                          <button
+                            type="submit"
+                            disabled={subtaskLoading || !subtaskTitle.trim()}
+                            className="px-4 py-2 bg-slate-700 text-white text-sm font-medium rounded hover:bg-slate-600 disabled:opacity-50 transition"
+                          >
+                            追加
+                          </button>
+                        </form>
+
+                        {/* サブタスク一覧 */}
+                        {task.subtasks && task.subtasks.length > 0 ? (
+                          <ul className="space-y-2 mt-2">
+                            {task.subtasks.map((sub) => (
+                              <li
+                                key={sub.id}
+                                className="p-2.5 bg-white border border-gray-200 rounded flex items-center justify-between text-sm"
+                              >
+                                {editingSubtaskId === sub.id ? (
+                                  // 編集モード
+                                  <div className="flex items-center gap-2 flex-1 mr-2">
+                                    <input
+                                      type="text"
+                                      value={editingSubtaskTitle}
+                                      onChange={(e) =>
+                                        setEditingSubtaskTitle(e.target.value)
+                                      }
+                                      className="flex-1 p-1 border rounded text-sm focus:outline-none"
+                                    />
+                                    <button
+                                      onClick={() => handleUpdateSubtask(sub.id)}
+                                      className="text-xs text-green-600 hover:underline"
+                                    >
+                                      保存
+                                    </button>
+                                    <button
+                                      onClick={() => setEditingSubtaskId(null)}
+                                      className="text-xs text-gray-500 hover:underline"
+                                    >
+                                      キャンセル
+                                    </button>
+                                  </div>
+                                ) : (
+                                  // 通常表示モード
+                                  <>
+                                    <div className="flex items-center gap-2.5 flex-1 mr-2">
+                                      <input
+                                        type="checkbox"
+                                        checked={sub.is_completed}
+                                        onChange={() =>
+                                          toggleSubtask(sub.id, sub.is_completed)
+                                        }
+                                        className="w-4 h-4 accent-slate-700 cursor-pointer"
+                                      />
+                                      <span
+                                        className={
+                                          sub.is_completed
+                                            ? 'line-through text-gray-400'
+                                            : 'text-gray-700'
+                                        }
+                                      >
+                                        {sub.title}
+                                      </span>
+                                    </div>
+
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        onClick={() => {
+                                          setEditingSubtaskId(sub.id);
+                                          setEditingSubtaskTitle(sub.title);
+                                        }}
+                                        className="text-xs text-gray-500 hover:text-slate-800"
+                                      >
+                                        編集
+                                      </button>
+                                      <button
+                                        onClick={() => deleteSubtask(sub.id)}
+                                        className="text-xs text-red-500 hover:underline"
+                                      >
+                                        削除
+                                      </button>
+                                    </div>
+                                  </>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-xs text-gray-400 italic">
+                            サブタスクはまだありません。15分でできる小さな作業を追加してみましょう！
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+      </div>
     </main>
   );
 }
