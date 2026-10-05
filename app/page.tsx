@@ -194,31 +194,30 @@ export default function Home() {
   };
 
   return (
-    // 背景画像設定
-    <main className="relative min-h-screen bg-[url('/薪割り.jpeg')] bg-cover bg-center bg-fixed bg-no-repeat p-6 text-white">
-      {/* 黒色の半透明オーバーレイ（白文字を見やすくするための黒フィルター） */}
-      <div className="fixed inset-0 bg-black/90 backdrop-blur-xs -z-10" />
+    <main className="relative min-h-screen p-6">
+      {/* 背景画像：明るさ30% (brightness-30) */}
+      <div className="fixed inset-0 bg-[url('/薪割り.jpeg')] bg-cover bg-center bg-fixed bg-no-repeat brightness-30 -z-10" />
 
       {/* コンテンツエリア */}
       <div className="max-w-2xl mx-auto">
-        <h1 className="text-2xl font-bold mb-6 text-center text-white drop-shadow">
-           Task Chopper
+        <h1 className="text-2xl font-bold mb-6 text-center text-white tracking-wide">
+          Task Chopper
         </h1>
 
-        {/* 課題登録フォーム */}
+        {/* 課題登録フォーム (白メイン) */}
         <form onSubmit={handleSubmit} className="flex gap-2 mb-8">
           <input
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="大きな課題を入力（例：期末レポート 3,000字）"
-            className="flex-1 p-3 border border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400 bg-slate-900/80 text-white placeholder-slate-400"
+            className="flex-1 p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400 bg-white text-slate-800 placeholder-gray-400 shadow-sm"
             disabled={loading}
           />
           <button
             type="submit"
             disabled={loading || !title.trim()}
-            className="px-6 py-3 bg-black text-slate-900 font-bold rounded-lg hover:bg-slate-200 disabled:opacity-50 transition"
+            className="px-6 py-3 bg-slate-800 text-white font-semibold rounded-lg hover:bg-slate-700 disabled:opacity-50 transition shadow-sm"
           >
             {loading ? '追加中...' : '追加'}
           </button>
@@ -226,9 +225,11 @@ export default function Home() {
 
         {/* 課題一覧 */}
         <section>
-          <h2 className="text-lg font-semibold mb-4 text-slate-200">登録された課題一覧</h2>
+          <h2 className="text-lg font-semibold mb-4 text-white/90">登録された課題一覧</h2>
           {tasks.length === 0 ? (
-            <p className="text-slate-400 text-center py-8">課題はまだ登録されていません。</p>
+            <p className="text-gray-300 text-center py-8 bg-white/10 backdrop-blur-xs rounded-lg">
+              課題はまだ登録されていません。
+            </p>
           ) : (
             <ul className="space-y-4">
               {tasks.map((task) => {
@@ -242,8 +243,8 @@ export default function Home() {
                     key={task.id}
                     className={`border rounded-lg shadow-md transition overflow-hidden ${
                       task.is_completed
-                        ? 'bg-slate-900/50 border-slate-700/50'
-                        : 'bg-slate-900/80 border-slate-700'
+                        ? 'bg-white/80 border-gray-200'
+                        : 'bg-white border-gray-200'
                     }`}
                   >
                     {/* 親タスクヘッダー */}
@@ -253,13 +254,13 @@ export default function Home() {
                           type="checkbox"
                           checked={task.is_completed}
                           onChange={() => toggleTask(task.id, task.is_completed)}
-                          className="w-5 h-5 accent-slate-400 cursor-pointer"
+                          className="w-5 h-5 accent-slate-800 cursor-pointer"
                         />
                         <span
                           className={`font-medium ${
                             task.is_completed
-                              ? 'line-through text-white/40'
-                              : 'text-white'
+                              ? 'line-through text-gray-400'
+                              : 'text-slate-800'
                           }`}
                         >
                           {task.title}
@@ -272,11 +273,11 @@ export default function Home() {
                           onClick={() =>
                             setExpandedTaskId(isExpanded ? null : task.id)
                           }
-                          className="px-3 py-1 text-xs font-semibold rounded-full border border-slate-600 hover:bg-slate-800 text-slate-200 transition flex items-center gap-1"
+                          className="px-3 py-1 text-xs font-semibold rounded-full border border-slate-300 hover:bg-slate-100 text-slate-700 transition flex items-center gap-1 bg-white"
                         >
-                           チョップ（15分分解）
+                          チョップ（15分分解）
                           {totalSubCount > 0 && (
-                            <span className="bg-slate-700 px-1.5 py-0.5 rounded-full text-slate-200">
+                            <span className="bg-slate-200 px-1.5 py-0.5 rounded-full text-slate-800">
                               {completedSubCount}/{totalSubCount}
                             </span>
                           )}
@@ -284,7 +285,7 @@ export default function Home() {
 
                         <button
                           onClick={() => deleteTask(task.id)}
-                          className="px-2 py-1 text-xs text-red-400 hover:bg-red-950/50 rounded transition"
+                          className="px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded transition"
                         >
                           削除
                         </button>
@@ -293,8 +294,8 @@ export default function Home() {
 
                     {/* 階層化表示：サブタスクエリア */}
                     {isExpanded && (
-                      <div className="bg-slate-950/80 border-t border-slate-800 p-4 pl-8 space-y-3">
-                        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                      <div className="bg-slate-50 border-t border-gray-200 p-4 pl-8 space-y-3">
+                        <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
                           15分アクション（サブタスク）
                         </h3>
 
@@ -308,13 +309,13 @@ export default function Home() {
                             value={subtaskTitle}
                             onChange={(e) => setSubtaskTitle(e.target.value)}
                             placeholder="15分で終わる作業（例：目次案をメモ帳に書く）"
-                            className="flex-1 p-2 text-sm border border-slate-700 rounded focus:outline-none focus:ring-1 focus:ring-slate-400 bg-slate-900 text-white placeholder-slate-500"
+                            className="flex-1 p-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-slate-500 bg-white text-slate-800 placeholder-gray-400"
                             disabled={subtaskLoading}
                           />
                           <button
                             type="submit"
                             disabled={subtaskLoading || !subtaskTitle.trim()}
-                            className="px-4 py-2 bg-slate-200 text-slate-900 text-sm font-medium rounded hover:bg-white disabled:opacity-50 transition"
+                            className="px-4 py-2 bg-slate-800 text-white text-sm font-medium rounded hover:bg-slate-700 disabled:opacity-50 transition"
                           >
                             追加
                           </button>
@@ -326,7 +327,7 @@ export default function Home() {
                             {task.subtasks.map((sub) => (
                               <li
                                 key={sub.id}
-                                className="p-2.5 bg-slate-900/90 border border-slate-800 rounded flex items-center justify-between text-sm"
+                                className="p-2.5 bg-white border border-gray-200 rounded flex items-center justify-between text-sm"
                               >
                                 {editingSubtaskId === sub.id ? (
                                   // 編集モード
@@ -337,17 +338,17 @@ export default function Home() {
                                       onChange={(e) =>
                                         setEditingSubtaskTitle(e.target.value)
                                       }
-                                      className="flex-1 p-1 border border-slate-600 rounded text-sm focus:outline-none bg-slate-800 text-white"
+                                      className="flex-1 p-1 border border-gray-300 rounded text-sm focus:outline-none bg-white text-slate-800"
                                     />
                                     <button
                                       onClick={() => handleUpdateSubtask(sub.id)}
-                                      className="text-xs text-green-400 hover:underline"
+                                      className="text-xs text-green-600 hover:underline"
                                     >
                                       保存
                                     </button>
                                     <button
                                       onClick={() => setEditingSubtaskId(null)}
-                                      className="text-xs text-slate-400 hover:underline"
+                                      className="text-xs text-gray-500 hover:underline"
                                     >
                                       キャンセル
                                     </button>
@@ -362,13 +363,13 @@ export default function Home() {
                                         onChange={() =>
                                           toggleSubtask(sub.id, sub.is_completed)
                                         }
-                                        className="w-4 h-4 accent-slate-400 cursor-pointer"
+                                        className="w-4 h-4 accent-slate-800 cursor-pointer"
                                       />
                                       <span
                                         className={
                                           sub.is_completed
-                                            ? 'line-through text-white/40'
-                                            : 'text-slate-100'
+                                            ? 'line-through text-gray-400'
+                                            : 'text-slate-800'
                                         }
                                       >
                                         {sub.title}
@@ -381,13 +382,13 @@ export default function Home() {
                                           setEditingSubtaskId(sub.id);
                                           setEditingSubtaskTitle(sub.title);
                                         }}
-                                        className="text-xs text-slate-400 hover:text-white"
+                                        className="text-xs text-gray-500 hover:text-slate-800"
                                       >
                                         編集
                                       </button>
                                       <button
                                         onClick={() => deleteSubtask(sub.id)}
-                                        className="text-xs text-red-400 hover:underline"
+                                        className="text-xs text-red-500 hover:underline"
                                       >
                                         削除
                                       </button>
@@ -398,7 +399,7 @@ export default function Home() {
                             ))}
                           </ul>
                         ) : (
-                          <p className="text-xs text-slate-500 italic">
+                          <p className="text-xs text-gray-400 italic">
                             サブタスクはまだありません。15分でできる小さな作業を追加してみましょう！
                           </p>
                         )}
