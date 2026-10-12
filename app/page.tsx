@@ -35,6 +35,11 @@ export default function Home() {
   const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
   const [editingSubtaskTitle, setEditingSubtaskTitle] = useState('');
 
+  // --- 第4週：タイマー機能の状態管理 ---
+  const [activeTimerSubtask, setActiveTimerSubtask] = useState<Subtask | null>(null);
+  const [timeLeft, setTimeLeft] = useState<number>(15 * 60); // デフォルト15分 (900秒)
+  const [isTimerRunning, setIsTimerRunning] = useState<boolean>(false);
+
   // 1. タスクおよびサブタスクの一覧取得
   const fetchTasks = async () => {
     const { data: tasksData, error: tasksError } = await supabase
@@ -68,6 +73,66 @@ export default function Home() {
   useEffect(() => {
     fetchTasks();
   }, []);
+
+  // --- 第4週：タイマーのカウントダウン & 完了自動処理 ---
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+
+    if (isTimerRunning && timeLeft > 0) {
+      interval = setInterval(() => {
+        setTimeLeft((prev) => prev - 1);
+      }, 1000);
+    } else if (timeLeft === 0 && isTimerRunning && activeTimerSubtask) {
+      setIsTimerRunning(false);
+      handleTimerComplete(activeTimerSubtask.id);
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isTimerRunning, timeLeft, activeTimerSubtask]);
+
+  // タイマー完了時にサブタスクを自動で完了状態へ更新
+  const handleTimerComplete = async (subtaskId: string) => {
+    // 画面側の表示を即時完了に更新
+    setTasks((prev) =>
+      prev.map((task) => ({
+        ...task,
+        subtasks: task.subtasks?.map((sub) =>
+          sub.id === subtaskId ? { ...sub, is_completed: true } : sub
+        ),
+      }))
+    );
+
+    // Supabase上のデータ更新
+    const { error } = await supabase
+      .from('subtasks')
+      .update({ is_completed: true })
+      .eq('id', subtaskId);
+
+    if (error) {
+      alert('サブタスクの自動完了更新に失敗しました: ' + error.message);
+      fetchTasks();
+    } else {
+      alert('15分集中タイマーが完了しました！サブタスクを完了に設定しました。');
+      setActiveTimerSubtask(null);
+      fetchTasks();
+    }
+  };
+
+  // タイマー開始処理 (seconds: 900秒 = 15分)
+  const startTimerForSubtask = (subtask: Subtask, seconds: number = 15 * 60) => {
+    setActiveTimerSubtask(subtask);
+    setTimeLeft(seconds);
+    setIsTimerRunning(true);
+  };
+
+  // 秒数を mm:ss 形式に整形
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  };
 
   // 2. 親タスク新規登録
   const handleSubmit = async (e: React.FormEvent) => {
@@ -196,7 +261,7 @@ export default function Home() {
   return (
     <main className="relative min-h-screen p-6">
       {/* 背景画像：明るさ30% (brightness-30) */}
-      <div className="fixed inset-0 bg-[url('/薪割り.jpeg')] bg-cover bg-center bg-fixed bg-no-repeat brightness-30 -z-10" />
+      <div className="fixed inset-0 bg-[url('/bg.jpg')] bg-cover bg-center bg-fixed bg-no-repeat brightness-30 -z-10" />
 
       {/* コンテンツエリア */}
       <div className="max-w-2xl mx-auto">
@@ -204,7 +269,44 @@ export default function Home() {
           Task Chopper
         </h1>
 
-        {/* 課題登録フォーム (白メイン) */}
+        {/* 第4週：集中タイマーコントロールパネル */}
+        {activeTimerSubtask && (
+          <div className="mb-6 p-4 bg-white rounded-lg shadow-lg border border-slate-200 text-center">
+            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
+              集中実行中のサブタスク
+            </div>
+            <div className="text-base font-semibold text-slate-800 mb-3">
+              {activeTimerSubtask.title}
+            </div>
+            <div className="text-4xl font-mono font-bold text-slate-900 mb-4 tracking-wider">
+              {formatTime(timeLeft)}
+            </div>
+            <div className="flex justify-center gap-2">
+              <button
+                onClick={() => setIsTimerRunning(!isTimerRunning)}
+                className="px-4 py-2 bg-slate-800 text-white text-sm font-semibold rounded hover:bg-slate-700 transition"
+              >
+                {isTimerRunning ? '一時停止' : '再開'}
+              </button>
+
+              <button
+                onClick={() => startTimerForSubtask(activeTimerSubtask, 15 * 60)}
+                className="px-4 py-2 bg-gray-100 text-slate-700 text-sm font-semibold rounded hover:bg-gray-200 transition"
+              >
+                15分にリセット
+              </button>
+
+              <button
+                onClick={() => setActiveTimerSubtask(null)}
+                className="px-3 py-2 text-xs text-red-600 hover:bg-red-50 rounded transition"
+              >
+                タイマー終了
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 課題登録フォーム (白メインUI) */}
         <form onSubmit={handleSubmit} className="flex gap-2 mb-8">
           <input
             type="text"
@@ -217,7 +319,7 @@ export default function Home() {
           <button
             type="submit"
             disabled={loading || !title.trim()}
-            className="px-6 py-3 bg-slate-800 text-white font-semibold rounded-lg hover:bg-slate-700 disabled:opacity-50 transition shadow-sm"
+            className="px-6 py-3 bg-white text-slate-800 font-semibold rounded-lg hover:bg-sky-200 disabled:bg-gray-200 disabled:text-gray-400 transition shadow-sm opacity-100"
           >
             {loading ? '追加中...' : '追加'}
           </button>
@@ -314,10 +416,10 @@ export default function Home() {
                           />
                           <button
                             type="submit"
-                            disabled={loading || !title.trim()}
-                            className="px-6 py-3 bg-white text-slate-800 font-semibold rounded-lg hover:bg-sky-200 disabled:bg-gray-200 disabled:text-gray-400 transition shadow-sm opacity-100"
+                            disabled={subtaskLoading || !subtaskTitle.trim()}
+                            className="px-4 py-2 bg-slate-800 text-white text-sm font-medium rounded hover:bg-slate-700 disabled:opacity-50 transition"
                           >
-                            {loading ? '追加中...' : '追加'}
+                            追加
                           </button>
                         </form>
 
@@ -377,6 +479,29 @@ export default function Home() {
                                     </div>
 
                                     <div className="flex items-center gap-2">
+                                      {/* タイマー開始ボタン群 */}
+                                      {!sub.is_completed && (
+                                        <>
+                                          <button
+                                            onClick={() =>
+                                              startTimerForSubtask(sub, 15 * 60)
+                                            }
+                                            className="px-2 py-1 text-xs bg-slate-800 text-white rounded hover:bg-slate-700 transition"
+                                          >
+                                            15分タイマー
+                                          </button>
+                                          <button
+                                            onClick={() =>
+                                              startTimerForSubtask(sub, 10)
+                                            }
+                                            className="px-2 py-1 text-xs bg-gray-100 text-slate-600 border border-gray-300 rounded hover:bg-gray-200 transition"
+                                            title="動作テスト用の10秒タイマー"
+                                          >
+                                            10秒テスト
+                                          </button>
+                                        </>
+                                      )}
+
                                       <button
                                         onClick={() => {
                                           setEditingSubtaskId(sub.id);
