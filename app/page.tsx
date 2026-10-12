@@ -289,7 +289,7 @@ export default function Home() {
   return (
     <main className="relative min-h-screen p-6">
       {/* 背景画像：明るさ30% (brightness-30) */}
-      <div className="fixed inset-0 bg-[url('/bg.jpg')] bg-cover bg-center bg-fixed bg-no-repeat brightness-30 -z-10" />
+      <div className="fixed inset-0 bg-[url('/薪割り.jpeg')] bg-cover bg-center bg-fixed bg-no-repeat brightness-30 -z-10" />
 
       {/* コンテンツエリア */}
       <div className="max-w-2xl mx-auto">
