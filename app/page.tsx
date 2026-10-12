@@ -35,9 +35,9 @@ export default function Home() {
   const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
   const [editingSubtaskTitle, setEditingSubtaskTitle] = useState('');
 
-  // --- 第4週：タイマー機能の状態管理 ---
+  // タイマー機能の状態管理
   const [activeTimerSubtask, setActiveTimerSubtask] = useState<Subtask | null>(null);
-  const [timeLeft, setTimeLeft] = useState<number>(15 * 60); // デフォルト15分 (900秒)
+  const [timeLeft, setTimeLeft] = useState<number>(15 * 60);
   const [isTimerRunning, setIsTimerRunning] = useState<boolean>(false);
 
   // 1. タスクおよびサブタスクの一覧取得
@@ -74,7 +74,16 @@ export default function Home() {
     fetchTasks();
   }, []);
 
-  // --- 第4週：タイマーのカウントダウン & 完了自動処理 ---
+  // デスクトップ通知を送る関数（画面端へのポップアップ表示）
+  const sendDesktopNotification = (titleText: string, bodyText: string) => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      if (Notification.permission === 'granted') {
+        new Notification(titleText, { body: bodyText });
+      }
+    }
+  };
+
+  // タイマーのカウントダウン & 完了自動処理
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
 
@@ -92,9 +101,24 @@ export default function Home() {
     };
   }, [isTimerRunning, timeLeft, activeTimerSubtask]);
 
-  // タイマー完了時にサブタスクを自動で完了状態へ更新
+  // タブのタイトルに残り時間を表示する処理
+  useEffect(() => {
+    if (isTimerRunning && activeTimerSubtask) {
+      document.title = `(${formatTime(timeLeft)}) Task Chopper`;
+    } else {
+      document.title = 'Task Chopper';
+    }
+  }, [isTimerRunning, timeLeft, activeTimerSubtask]);
+
+  // タイマー完了時の処理
   const handleTimerComplete = async (subtaskId: string) => {
-    // 画面側の表示を即時完了に更新
+    // 1. デスクトップ通知のみを実行（画面右端に表示）
+    sendDesktopNotification(
+      '15分タイマー完了',
+      `「${activeTimerSubtask?.title || 'サブタスク'}」が自動完了しました！`
+    );
+
+    // 2. 画面側の表示を即時完了に更新
     setTasks((prev) =>
       prev.map((task) => ({
         ...task,
@@ -104,7 +128,7 @@ export default function Home() {
       }))
     );
 
-    // Supabase上のデータ更新
+    // 3. Supabase上のデータ更新
     const { error } = await supabase
       .from('subtasks')
       .update({ is_completed: true })
@@ -114,14 +138,20 @@ export default function Home() {
       alert('サブタスクの自動完了更新に失敗しました: ' + error.message);
       fetchTasks();
     } else {
-      alert('15分集中タイマーが完了しました！サブタスクを完了に設定しました。');
       setActiveTimerSubtask(null);
       fetchTasks();
     }
   };
 
-  // タイマー開始処理 (seconds: 900秒 = 15分)
+  // タイマー開始処理
   const startTimerForSubtask = (subtask: Subtask, seconds: number = 15 * 60) => {
+    // ブラウザに通知許可をリクエスト
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      if (Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+    }
+
     setActiveTimerSubtask(subtask);
     setTimeLeft(seconds);
     setIsTimerRunning(true);
@@ -134,7 +164,7 @@ export default function Home() {
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   };
 
-  // 2. 親タスク新規登録
+  // 親タスク新規登録
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
@@ -151,7 +181,7 @@ export default function Home() {
     setLoading(false);
   };
 
-  // 3. 親タスクの完了トグル
+  // 親タスクの完了トグル
   const toggleTask = async (id: string, currentStatus: boolean) => {
     setTasks((prev) =>
       prev.map((t) => (t.id === id ? { ...t, is_completed: !currentStatus } : t))
@@ -168,7 +198,7 @@ export default function Home() {
     }
   };
 
-  // 4. 親タスク削除
+  // 親タスク削除
   const deleteTask = async (id: string) => {
     if (!confirm('この課題と含まれるサブタスクをすべて削除しますか？')) return;
 
@@ -182,9 +212,7 @@ export default function Home() {
     }
   };
 
-  // --- サブタスク操作 ---
-
-  // 5. サブタスク追加
+  // サブタスク追加
   const handleAddSubtask = async (taskId: string, e: React.FormEvent) => {
     e.preventDefault();
     if (!subtaskTitle.trim()) return;
@@ -207,7 +235,7 @@ export default function Home() {
     setSubtaskLoading(false);
   };
 
-  // 6. サブタスク完了トグル
+  // サブタスク完了トグル
   const toggleSubtask = async (subtaskId: string, currentStatus: boolean) => {
     setTasks((prev) =>
       prev.map((task) => ({
@@ -229,7 +257,7 @@ export default function Home() {
     }
   };
 
-  // 7. サブタスク編集保存
+  // サブタスク編集保存
   const handleUpdateSubtask = async (subtaskId: string) => {
     if (!editingSubtaskTitle.trim()) return;
 
@@ -247,7 +275,7 @@ export default function Home() {
     }
   };
 
-  // 8. サブタスク削除
+  // サブタスク削除
   const deleteSubtask = async (subtaskId: string) => {
     const { error } = await supabase.from('subtasks').delete().eq('id', subtaskId);
 
@@ -261,7 +289,7 @@ export default function Home() {
   return (
     <main className="relative min-h-screen p-6">
       {/* 背景画像：明るさ30% (brightness-30) */}
-      <div className="fixed inset-0 bg-[url('/薪割り.jpeg')] bg-cover bg-center bg-fixed bg-no-repeat brightness-30 -z-10" />
+      <div className="fixed inset-0 bg-[url('/bg.jpg')] bg-cover bg-center bg-fixed bg-no-repeat brightness-30 -z-10" />
 
       {/* コンテンツエリア */}
       <div className="max-w-2xl mx-auto">
@@ -269,7 +297,7 @@ export default function Home() {
           Task Chopper
         </h1>
 
-        {/* 第4週：集中タイマーコントロールパネル */}
+        {/* 集中タイマーコントロールパネル */}
         {activeTimerSubtask && (
           <div className="mb-6 p-4 bg-white rounded-lg shadow-lg border border-slate-200 text-center">
             <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
@@ -306,7 +334,7 @@ export default function Home() {
           </div>
         )}
 
-        {/* 課題登録フォーム (白メインUI) */}
+        {/* 課題登録フォーム (白メインUI・透けないボタン) */}
         <form onSubmit={handleSubmit} className="flex gap-2 mb-8">
           <input
             type="text"
