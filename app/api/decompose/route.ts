@@ -20,8 +20,8 @@ export async function POST(req: Request) {
 【大きな課題】: ${taskTitle}
 
 【出力条件】:
-- 余計な解説や挨拶、マークダウン表記は一切含めず、純粋なJSON文字列配列（例: ["アクション1", "アクション2", "アクション3"]）のみを出力してください。
-- 各サブタスクは「〜をメモ帳に書く」「〜を検索して1ページ読む」など、15分で即着手できるレベルに具体化してください。
+- 余計な挨拶や解説、マークダウン表記は一切含めず、純粋なJSON文字列配列（例: ["アクション1", "アクション2", "アクション3"]）のみを出力してください。
+- 各サブタスクは15分で即着手できるレベルに具体化してください。
 `;
 
     const response = await fetch(
@@ -40,13 +40,17 @@ export async function POST(req: Request) {
     if (!response.ok) {
       const errorData = await response.json();
       console.error('Gemini API Error:', errorData);
-      return NextResponse.json({ error: 'LLM API呼び出しに失敗しました' }, { status: 500 });
+      // 詳細なエラーメッセージをフロントエンドに返す
+      const errorMessage = errorData.error?.message || response.statusText;
+      return NextResponse.json(
+        { error: `LLM APIエラー: ${errorMessage}` },
+        { status: 500 }
+      );
     }
 
     const data = await response.json();
     const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
-    // 返ってきた文字列から余計な囲み（```json ... ```等）を除去してJSONパース
     const jsonText = rawText.replace(/```json|```/g, '').trim();
     const subtaskTitles: string[] = JSON.parse(jsonText);
 
