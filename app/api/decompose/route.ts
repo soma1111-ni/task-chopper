@@ -24,8 +24,9 @@ export async function POST(req: Request) {
 - 各サブタスクは15分で即着手できるレベルに具体化してください。
 `;
 
+    // gemini-flash-latest を指定して常に最新のFlashモデルを利用
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: {
@@ -40,7 +41,6 @@ export async function POST(req: Request) {
     if (!response.ok) {
       const errorData = await response.json();
       console.error('Gemini API Error:', errorData);
-      // 詳細なエラーメッセージをフロントエンドに返す
       const errorMessage = errorData.error?.message || response.statusText;
       return NextResponse.json(
         { error: `LLM APIエラー: ${errorMessage}` },
