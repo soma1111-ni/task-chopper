@@ -35,6 +35,9 @@ export default function Home() {
   const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
   const [editingSubtaskTitle, setEditingSubtaskTitle] = useState('');
 
+  // AI分解のローディング状態管理 (タスクIDごとに管理)
+  const [aiLoadingTaskId, setAiLoadingTaskId] = useState<string | null>(null);
+
   // タイマー機能の状態管理
   const [activeTimerSubtask, setActiveTimerSubtask] = useState<Subtask | null>(null);
   const [timeLeft, setTimeLeft] = useState<number>(15 * 60);
@@ -74,7 +77,7 @@ export default function Home() {
     fetchTasks();
   }, []);
 
-  // デスクトップ通知を送る関数（画面端へのポップアップ表示）
+  // デスクトップ通知を送る関数
   const sendDesktopNotification = (titleText: string, bodyText: string) => {
     if (typeof window !== 'undefined' && 'Notification' in window) {
       if (Notification.permission === 'granted') {
@@ -112,13 +115,11 @@ export default function Home() {
 
   // タイマー完了時の処理
   const handleTimerComplete = async (subtaskId: string) => {
-    // 1. デスクトップ通知のみを実行（画面右端に表示）
     sendDesktopNotification(
       '15分タイマー完了',
       `「${activeTimerSubtask?.title || 'サブタスク'}」が自動完了しました！`
     );
 
-    // 2. 画面側の表示を即時完了に更新
     setTasks((prev) =>
       prev.map((task) => ({
         ...task,
@@ -128,7 +129,6 @@ export default function Home() {
       }))
     );
 
-    // 3. Supabase上のデータ更新
     const { error } = await supabase
       .from('subtasks')
       .update({ is_completed: true })
@@ -145,7 +145,6 @@ export default function Home() {
 
   // タイマー開始処理
   const startTimerForSubtask = (subtask: Subtask, seconds: number = 15 * 60) => {
-    // ブラウザに通知許可をリクエスト
     if (typeof window !== 'undefined' && 'Notification' in window) {
       if (Notification.permission === 'default') {
         Notification.requestPermission();
@@ -164,7 +163,7 @@ export default function Home() {
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   };
 
-  // 親タスク新規登録
+  // 2. 親タスク新規登録
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
@@ -181,7 +180,7 @@ export default function Home() {
     setLoading(false);
   };
 
-  // 親タスクの完了トグル
+  // 3. 親タスクの完了トグル
   const toggleTask = async (id: string, currentStatus: boolean) => {
     setTasks((prev) =>
       prev.map((t) => (t.id === id ? { ...t, is_completed: !currentStatus } : t))
@@ -198,7 +197,7 @@ export default function Home() {
     }
   };
 
-  // 親タスク削除
+  // 4. 親タスク削除
   const deleteTask = async (id: string) => {
     if (!confirm('この課題と含まれるサブタスクをすべて削除しますか？')) return;
 
@@ -212,7 +211,55 @@ export default function Home() {
     }
   };
 
-  // サブタスク追加
+  // AIで自動分解
+  const handleAiDecompose = async (taskId: string, taskTitle: string) => {
+    setAiLoadingTaskId(taskId);
+
+    try {
+      const res = await fetch('/api/decompose', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskTitle }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        alert('AI分解エラー: ' + (data.error || '通信に失敗しました'));
+        setAiLoadingTaskId(null);
+        return;
+      }
+
+      const generatedSubtasks: string[] = data.subtasks;
+
+      if (!generatedSubtasks || generatedSubtasks.length === 0) {
+        alert('サブタスクを生成できませんでした。');
+        setAiLoadingTaskId(null);
+        return;
+      }
+
+      const insertData = generatedSubtasks.map((subTitle) => ({
+        task_id: taskId,
+        title: subTitle,
+        is_completed: false,
+      }));
+
+      const { error } = await supabase.from('subtasks').insert(insertData);
+
+      if (error) {
+        alert('生成されたサブタスクの保存に失敗しました: ' + error.message);
+      } else {
+        setExpandedTaskId(taskId);
+        fetchTasks();
+      }
+    } catch (e: any) {
+      alert('処理中にエラーが発生しました: ' + e.message);
+    } finally {
+      setAiLoadingTaskId(null);
+    }
+  };
+
+  // サブタスク手動追加
   const handleAddSubtask = async (taskId: string, e: React.FormEvent) => {
     e.preventDefault();
     if (!subtaskTitle.trim()) return;
@@ -288,7 +335,7 @@ export default function Home() {
 
   return (
     <main className="relative min-h-screen p-6">
-      {/* 背景画像：明るさ30% (brightness-30) */}
+      {/* 背景画像：/薪割り.jpeg 指定、明るさ30% (brightness-30) */}
       <div className="fixed inset-0 bg-[url('/薪割り.jpeg')] bg-cover bg-center bg-fixed bg-no-repeat brightness-30 -z-10" />
 
       {/* コンテンツエリア */}
@@ -367,6 +414,7 @@ export default function Home() {
                 const completedSubCount =
                   task.subtasks?.filter((s) => s.is_completed).length || 0;
                 const totalSubCount = task.subtasks?.length || 0;
+                const isAiLoading = aiLoadingTaskId === task.id;
 
                 return (
                   <li
@@ -398,7 +446,16 @@ export default function Home() {
                       </div>
 
                       <div className="flex items-center gap-2">
-                        {/* 分解ボタン / 進捗バッジ */}
+                        {/* AI分解ボタン */}
+                        <button
+                          onClick={() => handleAiDecompose(task.id, task.title)}
+                          disabled={isAiLoading || task.is_completed}
+                          className="px-3 py-1 text-xs font-semibold rounded-full border border-sky-300 bg-sky-50 text-sky-800 hover:bg-sky-100 disabled:opacity-50 transition"
+                        >
+                          {isAiLoading ? 'AI生成中...' : 'AIで分解'}
+                        </button>
+
+                        {/* 手動展開ボタン / 進捗バッジ */}
                         <button
                           onClick={() =>
                             setExpandedTaskId(isExpanded ? null : task.id)
@@ -553,7 +610,7 @@ export default function Home() {
                           </ul>
                         ) : (
                           <p className="text-xs text-gray-400 italic">
-                            サブタスクはまだありません。15分でできる小さな作業を追加してみましょう！
+                            サブタスクはまだありません。「AIで分解」を押すか、15分でできる小さな作業を追加してみましょう！
                           </p>
                         )}
                       </div>
