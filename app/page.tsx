@@ -337,20 +337,37 @@ export default function Home() {
     }
   };
 
-  // --- ドラッグ＆ドロップ処理 ---
+  // --- ドラッグ＆ドロップ処理（オートスクロール対応） ---
 
   // ドラッグ開始
   const handleDragStart = (subtask: Subtask) => {
     setDraggedSubtask(subtask);
   };
 
-  // ドラッグオーバー（ドロップ可能にするためデフォルト動作を抑制）
+  // ドラッグ終了
+  const handleDragEnd = () => {
+    setDraggedSubtask(null);
+  };
+
+  // ドラッグオーバー（オートスクロール処理含む）
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
+
+    // 画面端からの距離（ピクセル）とスクロール速度の設定
+    const threshold = 120; // 画面上下120px以内にカーソルが入るとスクロール開始
+    const scrollSpeed = 15; // スクロール速度
+
+    if (e.clientY < threshold) {
+      // 画面上部に近づいた場合は上にスクロール
+      window.scrollBy(0, -scrollSpeed);
+    } else if (window.innerHeight - e.clientY < threshold) {
+      // 画面下部に近づいた場合は下にスクロール
+      window.scrollBy(0, scrollSpeed);
+    }
   };
 
   // 「Today's Chunks」セクションへのドロップ
-  const handleDropToToday = async (e: React.DragEvent, targetIndex?: number) => {
+  const handleDropToToday = async (e: React.DragEvent) => {
     e.preventDefault();
     if (!draggedSubtask) return;
 
@@ -373,7 +390,6 @@ export default function Home() {
     e.preventDefault();
     if (!draggedSubtask || draggedSubtask.id === targetSubtask.id) return;
 
-    // 位置の入れ替えまたは所属リストの更新
     const targetIsToday = targetSubtask.is_today || false;
 
     const { error } = await supabase
@@ -437,7 +453,7 @@ export default function Home() {
           </div>
         )}
 
-        {/* 第6週：本日の15分タスク (Today's Chunks) ドロップゾーン */}
+        {/* 本日の15分タスク (Today's Chunks) ドロップゾーン */}
         <section
           onDragOver={handleDragOver}
           onDrop={(e) => handleDropToToday(e)}
@@ -466,6 +482,7 @@ export default function Home() {
                   key={sub.id}
                   draggable
                   onDragStart={() => handleDragStart(sub)}
+                  onDragEnd={handleDragEnd}
                   onDragOver={handleDragOver}
                   onDrop={(e) => handleDropToSubtask(e, sub)}
                   className="p-3 bg-white border border-sky-200 rounded shadow-xs flex items-center justify-between text-sm cursor-grab active:cursor-grabbing hover:border-sky-400 transition"
@@ -649,6 +666,7 @@ export default function Home() {
                                 key={sub.id}
                                 draggable
                                 onDragStart={() => handleDragStart(sub)}
+                                onDragEnd={handleDragEnd}
                                 onDragOver={handleDragOver}
                                 onDrop={(e) => handleDropToSubtask(e, sub)}
                                 className="p-2.5 bg-white border border-gray-200 rounded flex items-center justify-between text-sm cursor-grab active:cursor-grabbing hover:border-slate-400 transition"
