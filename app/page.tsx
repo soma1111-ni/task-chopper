@@ -8,6 +8,8 @@ type Subtask = {
   task_id: string;
   title: string;
   is_completed: boolean;
+  is_today?: boolean;
+  position?: number;
   created_at: string;
 };
 
@@ -21,6 +23,7 @@ type Task = {
 
 export default function Home() {
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [todaySubtasks, setTodaySubtasks] = useState<Subtask[]>([]);
   const [title, setTitle] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -43,6 +46,9 @@ export default function Home() {
   const [timeLeft, setTimeLeft] = useState<number>(15 * 60);
   const [isTimerRunning, setIsTimerRunning] = useState<boolean>(false);
 
+  // ドラッグ＆ドロップ用の状態管理
+  const [draggedSubtask, setDraggedSubtask] = useState<Subtask | null>(null);
+
   // 1. タスクおよびサブタスクの一覧取得
   const fetchTasks = async () => {
     const { data: tasksData, error: tasksError } = await supabase
@@ -58,6 +64,7 @@ export default function Home() {
     const { data: subtasksData, error: subtasksError } = await supabase
       .from('subtasks')
       .select('*')
+      .order('position', { ascending: true })
       .order('created_at', { ascending: true });
 
     if (subtasksError) {
@@ -65,9 +72,16 @@ export default function Home() {
       return;
     }
 
+    const allSubtasks = subtasksData || [];
+
+    // 本日のタスクリストを抽出
+    const todayList = allSubtasks.filter((sub) => sub.is_today);
+    setTodaySubtasks(todayList);
+
+    // 親タスクごとのサブタスク結合
     const combinedTasks = tasksData.map((task) => ({
       ...task,
-      subtasks: subtasksData?.filter((sub) => sub.task_id === task.id) || [],
+      subtasks: allSubtasks.filter((sub) => sub.task_id === task.id),
     }));
 
     setTasks(combinedTasks);
@@ -120,15 +134,6 @@ export default function Home() {
       `「${activeTimerSubtask?.title || 'サブタスク'}」が自動完了しました！`
     );
 
-    setTasks((prev) =>
-      prev.map((task) => ({
-        ...task,
-        subtasks: task.subtasks?.map((sub) =>
-          sub.id === subtaskId ? { ...sub, is_completed: true } : sub
-        ),
-      }))
-    );
-
     const { error } = await supabase
       .from('subtasks')
       .update({ is_completed: true })
@@ -136,11 +141,9 @@ export default function Home() {
 
     if (error) {
       alert('サブタスクの自動完了更新に失敗しました: ' + error.message);
-      fetchTasks();
-    } else {
-      setActiveTimerSubtask(null);
-      fetchTasks();
     }
+    setActiveTimerSubtask(null);
+    fetchTasks();
   };
 
   // タイマー開始処理
@@ -163,7 +166,7 @@ export default function Home() {
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   };
 
-  // 2. 親タスク新規登録
+  // 親タスク新規登録
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
@@ -180,12 +183,8 @@ export default function Home() {
     setLoading(false);
   };
 
-  // 3. 親タスクの完了トグル
+  // 親タスクの完了トグル
   const toggleTask = async (id: string, currentStatus: boolean) => {
-    setTasks((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, is_completed: !currentStatus } : t))
-    );
-
     const { error } = await supabase
       .from('tasks')
       .update({ is_completed: !currentStatus })
@@ -193,22 +192,20 @@ export default function Home() {
 
     if (error) {
       alert('更新に失敗しました: ' + error.message);
-      fetchTasks();
     }
+    fetchTasks();
   };
 
-  // 4. 親タスク削除
+  // 親タスク削除
   const deleteTask = async (id: string) => {
     if (!confirm('この課題と含まれるサブタスクをすべて削除しますか？')) return;
-
-    setTasks((prev) => prev.filter((t) => t.id !== id));
 
     const { error } = await supabase.from('tasks').delete().eq('id', id);
 
     if (error) {
       alert('削除に失敗しました: ' + error.message);
-      fetchTasks();
     }
+    fetchTasks();
   };
 
   // AIで自動分解
@@ -238,10 +235,12 @@ export default function Home() {
         return;
       }
 
-      const insertData = generatedSubtasks.map((subTitle) => ({
+      const insertData = generatedSubtasks.map((subTitle, index) => ({
         task_id: taskId,
         title: subTitle,
         is_completed: false,
+        is_today: false,
+        position: index,
       }));
 
       const { error } = await supabase.from('subtasks').insert(insertData);
@@ -270,6 +269,7 @@ export default function Home() {
         task_id: taskId,
         title: subtaskTitle,
         is_completed: false,
+        is_today: false,
       },
     ]);
 
@@ -284,15 +284,6 @@ export default function Home() {
 
   // サブタスク完了トグル
   const toggleSubtask = async (subtaskId: string, currentStatus: boolean) => {
-    setTasks((prev) =>
-      prev.map((task) => ({
-        ...task,
-        subtasks: task.subtasks?.map((sub) =>
-          sub.id === subtaskId ? { ...sub, is_completed: !currentStatus } : sub
-        ),
-      }))
-    );
-
     const { error } = await supabase
       .from('subtasks')
       .update({ is_completed: !currentStatus })
@@ -300,8 +291,21 @@ export default function Home() {
 
     if (error) {
       alert('サブタスク更新エラー: ' + error.message);
-      fetchTasks();
     }
+    fetchTasks();
+  };
+
+  // 本日のタスク トグルボタン（ドラッグ以外の直接追加/解除用）
+  const toggleTodayStatus = async (subtaskId: string, currentIsToday: boolean) => {
+    const { error } = await supabase
+      .from('subtasks')
+      .update({ is_today: !currentIsToday })
+      .eq('id', subtaskId);
+
+    if (error) {
+      alert('Todayタスク設定エラー: ' + error.message);
+    }
+    fetchTasks();
   };
 
   // サブタスク編集保存
@@ -333,20 +337,72 @@ export default function Home() {
     }
   };
 
+  // --- ドラッグ＆ドロップ処理 ---
+
+  // ドラッグ開始
+  const handleDragStart = (subtask: Subtask) => {
+    setDraggedSubtask(subtask);
+  };
+
+  // ドラッグオーバー（ドロップ可能にするためデフォルト動作を抑制）
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  // 「Today's Chunks」セクションへのドロップ
+  const handleDropToToday = async (e: React.DragEvent, targetIndex?: number) => {
+    e.preventDefault();
+    if (!draggedSubtask) return;
+
+    // 「本日のタスク」フラグを true に更新
+    const { error } = await supabase
+      .from('subtasks')
+      .update({ is_today: true })
+      .eq('id', draggedSubtask.id);
+
+    if (error) {
+      alert('Todayへの移動に失敗しました: ' + error.message);
+    }
+
+    setDraggedSubtask(null);
+    fetchTasks();
+  };
+
+  // サブタスクリスト間・順序入れ替えのドロップ処理
+  const handleDropToSubtask = async (e: React.DragEvent, targetSubtask: Subtask) => {
+    e.preventDefault();
+    if (!draggedSubtask || draggedSubtask.id === targetSubtask.id) return;
+
+    // 位置の入れ替えまたは所属リストの更新
+    const targetIsToday = targetSubtask.is_today || false;
+
+    const { error } = await supabase
+      .from('subtasks')
+      .update({ is_today: targetIsToday })
+      .eq('id', draggedSubtask.id);
+
+    if (error) {
+      alert('並び替え失敗: ' + error.message);
+    }
+
+    setDraggedSubtask(null);
+    fetchTasks();
+  };
+
   return (
     <main className="relative min-h-screen p-6">
       {/* 背景画像：/薪割り.jpeg 指定、明るさ30% (brightness-30) */}
       <div className="fixed inset-0 bg-[url('/薪割り.jpeg')] bg-cover bg-center bg-fixed bg-no-repeat brightness-30 -z-10" />
 
       {/* コンテンツエリア */}
-      <div className="max-w-2xl mx-auto">
-        <h1 className="text-2xl font-bold mb-6 text-center text-white tracking-wide">
+      <div className="max-w-2xl mx-auto space-y-6">
+        <h1 className="text-2xl font-bold text-center text-white tracking-wide">
           Task Chopper
         </h1>
 
         {/* 集中タイマーコントロールパネル */}
         {activeTimerSubtask && (
-          <div className="mb-6 p-4 bg-white rounded-lg shadow-lg border border-slate-200 text-center">
+          <div className="p-4 bg-white rounded-lg shadow-lg border border-slate-200 text-center">
             <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
               集中実行中のサブタスク
             </div>
@@ -381,8 +437,85 @@ export default function Home() {
           </div>
         )}
 
+        {/* 第6週：本日の15分タスク (Today's Chunks) ドロップゾーン */}
+        <section
+          onDragOver={handleDragOver}
+          onDrop={(e) => handleDropToToday(e)}
+          className="p-5 bg-white/95 rounded-lg border-2 border-dashed border-sky-400 shadow-lg"
+        >
+          <div className="flex justify-between items-center mb-3">
+            <h2 className="text-base font-bold text-slate-800 tracking-wide flex items-center gap-2">
+              本日の15分タスク (Today's Chunks)
+              <span className="text-xs font-normal text-slate-500">
+                （下のサブタスクをここへドラッグ＆ドロップ）
+              </span>
+            </h2>
+            <span className="text-xs font-semibold bg-sky-100 text-sky-800 px-2.5 py-0.5 rounded-full">
+              {todaySubtasks.filter((s) => s.is_completed).length}/{todaySubtasks.length} 完了
+            </span>
+          </div>
+
+          {todaySubtasks.length === 0 ? (
+            <div className="py-6 text-center text-xs text-slate-400 border border-gray-100 rounded bg-slate-50/50">
+              今日取り組む15分アクションをドラッグしてここに追加してください
+            </div>
+          ) : (
+            <ul className="space-y-2">
+              {todaySubtasks.map((sub) => (
+                <li
+                  key={sub.id}
+                  draggable
+                  onDragStart={() => handleDragStart(sub)}
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDropToSubtask(e, sub)}
+                  className="p-3 bg-white border border-sky-200 rounded shadow-xs flex items-center justify-between text-sm cursor-grab active:cursor-grabbing hover:border-sky-400 transition"
+                >
+                  <div className="flex items-center gap-3 flex-1 mr-2">
+                    <span className="text-gray-300 font-bold select-none cursor-grab">
+                      ::
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={sub.is_completed}
+                      onChange={() => toggleSubtask(sub.id, sub.is_completed)}
+                      className="w-4 h-4 accent-slate-800 cursor-pointer"
+                    />
+                    <span
+                      className={
+                        sub.is_completed
+                          ? 'line-through text-gray-400'
+                          : 'text-slate-800 font-medium'
+                      }
+                    >
+                      {sub.title}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {!sub.is_completed && (
+                      <button
+                        onClick={() => startTimerForSubtask(sub, 15 * 60)}
+                        className="px-2.5 py-1 text-xs bg-slate-800 text-white rounded hover:bg-slate-700 transition font-medium"
+                      >
+                        15分集中
+                      </button>
+                    )}
+                    <button
+                      onClick={() => toggleTodayStatus(sub.id, true)}
+                      className="text-xs text-slate-400 hover:text-slate-600 px-1.5 py-0.5 rounded border border-gray-200"
+                      title="Todayリストから外す"
+                    >
+                      解除
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
         {/* 課題登録フォーム (白メインUI・透けないボタン) */}
-        <form onSubmit={handleSubmit} className="flex gap-2 mb-8">
+        <form onSubmit={handleSubmit} className="flex gap-2">
           <input
             type="text"
             value={title}
@@ -508,13 +641,17 @@ export default function Home() {
                           </button>
                         </form>
 
-                        {/* サブタスク一覧 */}
+                        {/* サブタスク一覧（ドラッグ可能） */}
                         {task.subtasks && task.subtasks.length > 0 ? (
                           <ul className="space-y-2 mt-2">
                             {task.subtasks.map((sub) => (
                               <li
                                 key={sub.id}
-                                className="p-2.5 bg-white border border-gray-200 rounded flex items-center justify-between text-sm"
+                                draggable
+                                onDragStart={() => handleDragStart(sub)}
+                                onDragOver={handleDragOver}
+                                onDrop={(e) => handleDropToSubtask(e, sub)}
+                                className="p-2.5 bg-white border border-gray-200 rounded flex items-center justify-between text-sm cursor-grab active:cursor-grabbing hover:border-slate-400 transition"
                               >
                                 {editingSubtaskId === sub.id ? (
                                   // 編集モード
@@ -544,6 +681,9 @@ export default function Home() {
                                   // 通常表示モード
                                   <>
                                     <div className="flex items-center gap-2.5 flex-1 mr-2">
+                                      <span className="text-gray-300 font-bold select-none cursor-grab">
+                                        ::
+                                      </span>
                                       <input
                                         type="checkbox"
                                         checked={sub.is_completed}
@@ -564,6 +704,20 @@ export default function Home() {
                                     </div>
 
                                     <div className="flex items-center gap-2">
+                                      {/* Todayに追加・解除ボタン */}
+                                      <button
+                                        onClick={() =>
+                                          toggleTodayStatus(sub.id, !!sub.is_today)
+                                        }
+                                        className={`px-2 py-1 text-xs rounded border transition ${
+                                          sub.is_today
+                                            ? 'bg-sky-100 text-sky-800 border-sky-300'
+                                            : 'bg-gray-50 text-slate-600 border-gray-200 hover:bg-gray-100'
+                                        }`}
+                                      >
+                                        {sub.is_today ? 'Today選定中' : '+ Today'}
+                                      </button>
+
                                       {/* タイマー開始ボタン群 */}
                                       {!sub.is_completed && (
                                         <>
