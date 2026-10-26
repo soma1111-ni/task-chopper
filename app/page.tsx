@@ -445,7 +445,7 @@ export default function Home() {
         >
           <div className="flex justify-between items-center mb-3">
             <h2 className="text-base font-bold text-slate-800 tracking-wide flex items-center gap-2">
-              本日の15分タスク (Today's Chunks)
+              本日の15分タスク(Today)
               <span className="text-xs font-normal text-slate-500">
                 （下のサブタスクをここへドラッグ＆ドロップ）
               </span>
