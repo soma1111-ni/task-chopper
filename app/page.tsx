@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
+
 
 type Subtask = {
   id: string;
@@ -339,32 +340,62 @@ export default function Home() {
 
   // --- ドラッグ＆ドロップ処理（オートスクロール対応） ---
 
-  // ドラッグ開始
-  const handleDragStart = (subtask: Subtask) => {
-    setDraggedSubtask(subtask);
-  };
+  // スクロールアニメーション用の参照を保持
+const scrollRef = useRef<number | null>(null);
 
-  // ドラッグ終了
-  const handleDragEnd = () => {
-    setDraggedSubtask(null);
-  };
+// ドラッグ終了時にスクロールループを止めるクリーンアップ
+const stopAutoScroll = () => {
+  if (scrollRef.current !== null) {
+    cancelAnimationFrame(scrollRef.current);
+    scrollRef.current = null;
+  }
+};
 
-  // ドラッグオーバー（オートスクロール処理含む）
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
+const handleDragStart = (subtask: Subtask) => {
+  setDraggedSubtask(subtask);
+};
 
-    // 画面端からの距離（ピクセル）とスクロール速度の設定
-    const threshold = 120; // 画面上下120px以内にカーソルが入るとスクロール開始
-    const scrollSpeed = 15; // スクロール速度
+const handleDragEnd = () => {
+  stopAutoScroll();
+  setDraggedSubtask(null);
+};
 
-    if (e.clientY < threshold) {
-      // 画面上部に近づいた場合は上にスクロール
-      window.scrollBy(0, -scrollSpeed);
-    } else if (window.innerHeight - e.clientY < threshold) {
-      // 画面下部に近づいた場合は下にスクロール
-      window.scrollBy(0, scrollSpeed);
+const handleDragOver = (e: React.DragEvent) => {
+  e.preventDefault();
+
+  const threshold = 120; // 端からの判定距離
+  const maxSpeed = 18;   // 最大スクロール速度
+
+  const clientY = e.clientY;
+  const windowHeight = window.innerHeight;
+
+  // 上下端からの距離に応じたスクロール量の計算
+  let scrollAmount = 0;
+
+  if (clientY < threshold) {
+    // 上端に近づくほど速くスクロール
+    const intensity = (threshold - clientY) / threshold;
+    scrollAmount = -maxSpeed * intensity;
+  } else if (windowHeight - clientY < threshold) {
+    // 下端に近づくほど速くスクロール
+    const intensity = (threshold - (windowHeight - clientY)) / threshold;
+    scrollAmount = maxSpeed * intensity;
+  }
+
+  // スクロールが必要なエリアにいる場合、滑らかなループ処理を実行
+  if (scrollAmount !== 0) {
+    if (scrollRef.current === null) {
+      const loop = () => {
+        window.scrollBy(0, scrollAmount);
+        scrollRef.current = requestAnimationFrame(loop);
+      };
+      scrollRef.current = requestAnimationFrame(loop);
     }
-  };
+  } else {
+    // エリア外に出たら即時停止
+    stopAutoScroll();
+  }
+};
 
   // 「Today's Chunks」セクションへのドロップ
   const handleDropToToday = async (e: React.DragEvent) => {
