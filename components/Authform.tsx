@@ -20,7 +20,11 @@ export default function AuthForm() {
     const { error } =
       mode === 'login'
         ? await supabase.auth.signInWithPassword({ email, password })
-        : await supabase.auth.signUp({ email, password });
+        : await supabase.auth.signUp({
+            email,
+            password,
+            options: { emailRedirectTo: `${window.location.origin}/auth/confirmed` },
+        });
     setBusy(false);
 
     if (error) alert(error.message);
