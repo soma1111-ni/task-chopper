@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
+import AuthForm from '@/components/AuthForm';
 
 
 type Subtask = {
@@ -23,6 +25,10 @@ type Task = {
 };
 
 export default function Home() {
+  // 認証状態
+  const [session, setSession] = useState<Session | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+
   const [tasks, setTasks] = useState<Task[]>([]);
   const [todaySubtasks, setTodaySubtasks] = useState<Subtask[]>([]);
   const [title, setTitle] = useState('');
@@ -49,6 +55,9 @@ export default function Home() {
 
   // ドラッグ＆ドロップ用の状態管理
   const [draggedSubtask, setDraggedSubtask] = useState<Subtask | null>(null);
+
+  // オートスクロール用の参照（早期returnより前にフックを宣言しておく）
+  const scrollRef = useRef<number | null>(null);
 
   // 1. タスクおよびサブタスクの一覧取得
   const fetchTasks = async () => {
@@ -80,7 +89,7 @@ export default function Home() {
     setTodaySubtasks(todayList);
 
     // 親タスクごとのサブタスク結合
-    const combinedTasks = tasksData.map((task) => ({
+    const combinedTasks = (tasksData || []).map((task) => ({
       ...task,
       subtasks: allSubtasks.filter((sub) => sub.task_id === task.id),
     }));
@@ -88,9 +97,35 @@ export default function Home() {
     setTasks(combinedTasks);
   };
 
+  // 認証セッションの取得と監視
   useEffect(() => {
-    fetchTasks();
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      setAuthReady(true);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, s) => {
+      setSession(s);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
+
+  // ログイン状態に応じてデータを取得 / クリア
+  useEffect(() => {
+    if (session) {
+      fetchTasks();
+    } else {
+      setTasks([]);
+      setTodaySubtasks([]);
+      setExpandedTaskId(null);
+      setActiveTimerSubtask(null);
+      setIsTimerRunning(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session]);
 
   // デスクトップ通知を送る関数
   const sendDesktopNotification = (titleText: string, bodyText: string) => {
@@ -117,6 +152,7 @@ export default function Home() {
     return () => {
       if (interval) clearInterval(interval);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isTimerRunning, timeLeft, activeTimerSubtask]);
 
   // タブのタイトルに残り時間を表示する処理
@@ -167,7 +203,12 @@ export default function Home() {
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   };
 
-  // 親タスク新規登録
+  // ログアウト
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+  };
+
+  // 親タスク新規登録（user_id は DB 側の default auth.uid() で自動設定）
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
@@ -209,14 +250,17 @@ export default function Home() {
     fetchTasks();
   };
 
-  // AIで自動分解
+  // AIで自動分解（アクセストークンを付けて認証付きAPIを呼ぶ）
   const handleAiDecompose = async (taskId: string, taskTitle: string) => {
     setAiLoadingTaskId(taskId);
 
     try {
       const res = await fetch('/api/decompose', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token ?? ''}`,
+        },
         body: JSON.stringify({ taskTitle }),
       });
 
@@ -340,62 +384,59 @@ export default function Home() {
 
   // --- ドラッグ＆ドロップ処理（オートスクロール対応） ---
 
-  // スクロールアニメーション用の参照を保持
-const scrollRef = useRef<number | null>(null);
-
-// ドラッグ終了時にスクロールループを止めるクリーンアップ
-const stopAutoScroll = () => {
-  if (scrollRef.current !== null) {
-    cancelAnimationFrame(scrollRef.current);
-    scrollRef.current = null;
-  }
-};
-
-const handleDragStart = (subtask: Subtask) => {
-  setDraggedSubtask(subtask);
-};
-
-const handleDragEnd = () => {
-  stopAutoScroll();
-  setDraggedSubtask(null);
-};
-
-const handleDragOver = (e: React.DragEvent) => {
-  e.preventDefault();
-
-  const threshold = 120; // 端からの判定距離
-  const maxSpeed = 18;   // 最大スクロール速度
-
-  const clientY = e.clientY;
-  const windowHeight = window.innerHeight;
-
-  // 上下端からの距離に応じたスクロール量の計算
-  let scrollAmount = 0;
-
-  if (clientY < threshold) {
-    // 上端に近づくほど速くスクロール
-    const intensity = (threshold - clientY) / threshold;
-    scrollAmount = -maxSpeed * intensity;
-  } else if (windowHeight - clientY < threshold) {
-    // 下端に近づくほど速くスクロール
-    const intensity = (threshold - (windowHeight - clientY)) / threshold;
-    scrollAmount = maxSpeed * intensity;
-  }
-
-  // スクロールが必要なエリアにいる場合、滑らかなループ処理を実行
-  if (scrollAmount !== 0) {
-    if (scrollRef.current === null) {
-      const loop = () => {
-        window.scrollBy(0, scrollAmount);
-        scrollRef.current = requestAnimationFrame(loop);
-      };
-      scrollRef.current = requestAnimationFrame(loop);
+  // ドラッグ終了時にスクロールループを止めるクリーンアップ
+  const stopAutoScroll = () => {
+    if (scrollRef.current !== null) {
+      cancelAnimationFrame(scrollRef.current);
+      scrollRef.current = null;
     }
-  } else {
-    // エリア外に出たら即時停止
+  };
+
+  const handleDragStart = (subtask: Subtask) => {
+    setDraggedSubtask(subtask);
+  };
+
+  const handleDragEnd = () => {
     stopAutoScroll();
-  }
-};
+    setDraggedSubtask(null);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+
+    const threshold = 120; // 端からの判定距離
+    const maxSpeed = 18; // 最大スクロール速度
+
+    const clientY = e.clientY;
+    const windowHeight = window.innerHeight;
+
+    // 上下端からの距離に応じたスクロール量の計算
+    let scrollAmount = 0;
+
+    if (clientY < threshold) {
+      // 上端に近づくほど速くスクロール
+      const intensity = (threshold - clientY) / threshold;
+      scrollAmount = -maxSpeed * intensity;
+    } else if (windowHeight - clientY < threshold) {
+      // 下端に近づくほど速くスクロール
+      const intensity = (threshold - (windowHeight - clientY)) / threshold;
+      scrollAmount = maxSpeed * intensity;
+    }
+
+    // スクロールが必要なエリアにいる場合、滑らかなループ処理を実行
+    if (scrollAmount !== 0) {
+      if (scrollRef.current === null) {
+        const loop = () => {
+          window.scrollBy(0, scrollAmount);
+          scrollRef.current = requestAnimationFrame(loop);
+        };
+        scrollRef.current = requestAnimationFrame(loop);
+      }
+    } else {
+      // エリア外に出たら即時停止
+      stopAutoScroll();
+    }
+  };
 
   // 「Today's Chunks」セクションへのドロップ
   const handleDropToToday = async (e: React.DragEvent) => {
@@ -436,6 +477,24 @@ const handleDragOver = (e: React.DragEvent) => {
     fetchTasks();
   };
 
+  // --- 認証状態による出し分け（フックはすべてこの前で宣言済み） ---
+
+  // セッション確認中は何も描画しない（ログイン画面のちらつき防止）
+  if (!authReady) return null;
+
+  // 未ログイン時はログイン / 登録フォームを表示
+  if (!session) {
+    return (
+      <main className="relative min-h-screen p-6">
+        <div className="fixed inset-0 bg-[url('/薪割り.jpeg')] bg-cover bg-center bg-fixed bg-no-repeat brightness-30 -z-10" />
+        <h1 className="text-2xl font-bold text-center text-white tracking-wide mb-6">
+          Task Chopper
+        </h1>
+        <AuthForm />
+      </main>
+    );
+  }
+
   return (
     <main className="relative min-h-screen p-6">
       {/* 背景画像：/薪割り.jpeg 指定、明るさ30% (brightness-30) */}
@@ -443,9 +502,19 @@ const handleDragOver = (e: React.DragEvent) => {
 
       {/* コンテンツエリア */}
       <div className="max-w-2xl mx-auto space-y-6">
-        <h1 className="text-2xl font-bold text-center text-white tracking-wide">
-          Task Chopper
-        </h1>
+        {/* ヘッダー：タイトル + ユーザー情報 + ログアウト */}
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-white tracking-wide">Task Chopper</h1>
+          <div className="flex items-center gap-2 text-xs text-white/80">
+            <span>{session.user.email}</span>
+            <button
+              onClick={handleLogout}
+              className="px-2 py-1 border border-white/40 rounded hover:bg-white/10 transition"
+            >
+              ログアウト
+            </button>
+          </div>
+        </div>
 
         {/* 集中タイマーコントロールパネル */}
         {activeTimerSubtask && (
