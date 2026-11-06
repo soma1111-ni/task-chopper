@@ -1,7 +1,36 @@
 import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 
 export async function POST(req: Request) {
   try {
+    // --- 認証チェック：ログイン済みユーザーのみ利用可能 ---
+    const authHeader = req.headers.get('authorization') || '';
+    const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+
+    if (!token) {
+      return NextResponse.json({ error: '認証が必要です' }, { status: 401 });
+    }
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!supabaseUrl || !supabaseAnonKey) {
+      return NextResponse.json(
+        { error: 'Supabaseの環境変数が設定されていません' },
+        { status: 500 }
+      );
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      return NextResponse.json({ error: '認証に失敗しました' }, { status: 401 });
+    }
+
+    // --- ここから従来の処理 ---
     const { taskTitle } = await req.json();
 
     if (!taskTitle) {
@@ -52,9 +81,17 @@ export async function POST(req: Request) {
     const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
     const jsonText = rawText.replace(/```json|```/g, '').trim();
-    const subtaskTitles: string[] = JSON.parse(jsonText);
+    const parsed = JSON.parse(jsonText);
 
-    return NextResponse.json({ subtasks: subtaskTitles });
+    // 文字列配列であることを確認してから返す
+    if (!Array.isArray(parsed) || !parsed.every((s) => typeof s === 'string')) {
+      return NextResponse.json(
+        { error: 'AIの出力形式が不正でした。もう一度お試しください' },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ subtasks: parsed as string[] });
   } catch (error: any) {
     console.error('Decompose Error:', error);
     return NextResponse.json(
