@@ -8,6 +8,12 @@ export default function AuthForm() {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [busy, setBusy] = useState(false);
 
+  const switchMode = () => {
+    setMode(mode === 'login' ? 'signup' : 'login');
+    setEmail('');
+    setPassword('');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
@@ -36,7 +42,7 @@ export default function AuthForm() {
         className="w-full py-2 bg-slate-800 text-white rounded font-semibold disabled:opacity-50">
         {mode === 'login' ? 'ログイン' : '登録'}
       </button>
-      <button type="button" onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}
+      <button type="button" onClick={switchMode}
         className="w-full text-xs text-slate-500 hover:underline">
         {mode === 'login' ? 'アカウントを作る' : 'ログインへ戻る'}
       </button>
