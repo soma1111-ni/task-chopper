@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
-import AuthForm from '@/components/AuthForm';
+import AuthForm from '@/components/Authform';
 
 
 type Subtask = {
