@@ -838,25 +838,12 @@ export default function Home() {
 
                                       {/* タイマー開始ボタン群 */}
                                       {!sub.is_completed && (
-                                        <>
-                                          <button
-                                            onClick={() =>
-                                              startTimerForSubtask(sub, 15 * 60)
-                                            }
-                                            className="px-2 py-1 text-xs bg-slate-800 text-white rounded hover:bg-slate-700 transition"
-                                          >
-                                            15分タイマー
-                                          </button>
-                                          <button
-                                            onClick={() =>
-                                              startTimerForSubtask(sub, 10)
-                                            }
-                                            className="px-2 py-1 text-xs bg-gray-100 text-slate-600 border border-gray-300 rounded hover:bg-gray-200 transition"
-                                            title="動作テスト用の10秒タイマー"
-                                          >
-                                            10秒テスト
-                                          </button>
-                                        </>
+                                        <button
+                                          onClick={() => startTimerForSubtask(sub, 15 * 60)}
+                                          className="px-2 py-1 text-xs bg-slate-800 text-white rounded hover:bg-slate-700 transition"
+                                        >
+                                          15分タイマー
+                                        </button>
                                       )}
 
                                       <button
