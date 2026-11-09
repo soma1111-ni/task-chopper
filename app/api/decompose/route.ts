@@ -31,7 +31,9 @@ export async function POST(req: Request) {
     }
 
     // --- ここから従来の処理 ---
-    const { taskTitle } = await req.json();
+    const { taskTitle, taskDetail } = await req.json();
+    const detail =
+      typeof taskDetail === 'string' ? taskDetail.trim().slice(0, 1000) : '';
 
     if (!taskTitle) {
       return NextResponse.json({ error: '課題タイトルが必要です' }, { status: 400 });
@@ -44,9 +46,18 @@ export async function POST(req: Request) {
 
     const prompt = `
 あなたはタスク分解の専門家です。
-以下の「大きな課題」を、15分程度で実行可能な「超具体的で小さく行動できるアクション（サブタスク）」3〜5個に分解してください。
+以下の「大きな課題」と「課題の詳細」をもとに、15分程度で実行可能な「超具体的で小さく行動できるアクション（サブタスク）」3〜5個に分解してください。
 
 【大きな課題】: ${taskTitle}
+
+【課題の詳細（ユーザーが入力した情報）】:
+${detail || '（入力なし）'}
+
+【分解のルール】:
+- 詳細に書かれた期限・分量・進捗状況・制約を踏まえて分解してください。
+- すでに完了と書かれている作業は、サブタスクに含めないでください。
+- 詳細に書かれていない事実を、勝手に補ったり決めつけたりしないでください。
+- 詳細が「入力なし」の場合は、その課題に一般的に必要な手順で分解してください。
 
 【出力条件】:
 - 余計な挨拶や解説、マークダウン表記は一切含めず、純粋なJSON文字列配列（例: ["アクション1", "アクション2", "アクション3"]）のみを出力してください。

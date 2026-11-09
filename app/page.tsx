@@ -48,6 +48,10 @@ export default function Home() {
   // AI分解のローディング状態管理 (タスクIDごとに管理)
   const [aiLoadingTaskId, setAiLoadingTaskId] = useState<string | null>(null);
 
+  // AI分解に渡す詳細入力
+  const [aiDetailTaskId, setAiDetailTaskId] = useState<string | null>(null);
+  const [aiDetail, setAiDetail] = useState('');
+  
   // タイマー機能の状態管理
   const [activeTimerSubtask, setActiveTimerSubtask] = useState<Subtask | null>(null);
   const [timeLeft, setTimeLeft] = useState<number>(15 * 60);
@@ -251,7 +255,7 @@ export default function Home() {
   };
 
   // AIで自動分解（アクセストークンを付けて認証付きAPIを呼ぶ）
-  const handleAiDecompose = async (taskId: string, taskTitle: string) => {
+  const handleAiDecompose = async (taskId: string, taskTitle: string, taskDetail: string) => {
     setAiLoadingTaskId(taskId);
 
     try {
@@ -261,7 +265,7 @@ export default function Home() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${session?.access_token ?? ''}`,
         },
-        body: JSON.stringify({ taskTitle }),
+        body: JSON.stringify({ taskTitle, taskDetail }),
       });
 
       const data = await res.json();
@@ -294,6 +298,8 @@ export default function Home() {
         alert('生成されたサブタスクの保存に失敗しました: ' + error.message);
       } else {
         setExpandedTaskId(taskId);
+        setAiDetailTaskId(null);
+        setAiDetail('');
         fetchTasks();
       }
     } catch (e: any) {
@@ -698,7 +704,11 @@ export default function Home() {
                       <div className="flex items-center gap-2">
                         {/* AI分解ボタン */}
                         <button
-                          onClick={() => handleAiDecompose(task.id, task.title)}
+                          onClick={() => {
+                            setExpandedTaskId(task.id);
+                            setAiDetailTaskId(aiDetailTaskId === task.id ? null : task.id);
+                            setAiDetail('');
+                          }}
                           disabled={isAiLoading || task.is_completed}
                           className="px-3 py-1 text-xs font-semibold rounded-full border border-sky-300 bg-sky-50 text-sky-800 hover:bg-sky-100 disabled:opacity-50 transition"
                         >
@@ -735,7 +745,42 @@ export default function Home() {
                         <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
                           15分アクション（サブタスク）
                         </h3>
-
+                        {/* AI分解用の詳細入力 */}
+                        {aiDetailTaskId === task.id && (
+                          <div className="p-3 bg-sky-50 border border-sky-200 rounded space-y-2">
+                            <label className="block text-xs font-bold text-sky-800">
+                              課題の詳細（この内容をもとにAIがサブタスクを作ります）
+                            </label>
+                            <textarea
+                              value={aiDetail}
+                              onChange={(e) => setAiDetail(e.target.value)}
+                              rows={4}
+                              maxLength={1000}
+                              placeholder={'例：\n・提出期限は来週金曜、A4で3枚\n・テーマは決定済み、参考文献はまだ\n・序論は書き終わっている'}
+                              className="w-full p-2 text-sm border border-sky-200 rounded focus:outline-none focus:ring-1 focus:ring-sky-400 bg-white text-slate-800 placeholder-gray-400"
+                              disabled={isAiLoading}
+                            />
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs text-slate-400">{aiDetail.length}/1000</span>
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => setAiDetailTaskId(null)}
+                                  disabled={isAiLoading}
+                                  className="px-3 py-1 text-xs text-slate-500 hover:bg-white rounded transition"
+                                >
+                                  キャンセル
+                                </button>
+                                <button
+                                  onClick={() => handleAiDecompose(task.id, task.title, aiDetail)}
+                                  disabled={isAiLoading}
+                                  className="px-3 py-1 text-xs font-semibold bg-sky-600 text-white rounded hover:bg-sky-700 disabled:opacity-50 transition"
+                                >
+                                  {isAiLoading ? 'AI生成中...' : 'この内容で分解'}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                         {/* サブタスク追加フォーム */}
                         <form
                           onSubmit={(e) => handleAddSubtask(task.id, e)}
